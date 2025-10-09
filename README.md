@@ -7,9 +7,6 @@
 
 Um dashboard para monitoramento e análise de despesas de TI da empresa Hub Plural, consumindo dados diretamente da API do sistema de gestão Omie.
 
-![Screenshot do Dashboard](./screenshot.png)
-*(Adicione um screenshot da aplicação na raiz do projeto com o nome `screenshot.png`)*
-
 ## 📜 Sobre o Projeto
 
 Este projeto foi desenvolvido para atender a uma necessidade da equipe de TI da **Rio Ave**, que presta serviços para a **Hub Plural**, uma empresa de coworking adquirida pelo grupo.
