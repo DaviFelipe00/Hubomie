@@ -3,18 +3,20 @@
 import { Pie } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
-  ArcElement, // Elemento para gráficos de pizza/rosca
+  ArcElement,
   Tooltip,
   Legend,
   Title,
 } from 'chart.js';
+import ChartDataLabels from 'chartjs-plugin-datalabels'; // Importa o plugin
 
-// Registra os componentes necessários do Chart.js para o gráfico de Pizza
+// Registra os componentes e o plugin necessários do Chart.js
 ChartJS.register(
   ArcElement,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  ChartDataLabels // Registra o plugin de datalabels
 );
 
 interface GraficoProps {
@@ -31,16 +33,19 @@ export function GraficoDespesas({ dadosDoGrafico }: GraficoProps) {
             {
                 label: 'Valor Gasto (R$)',
                 data: dadosDoGrafico.valores,
-                // Um gráfico de pizza precisa de uma cor para cada fatia
                 backgroundColor: [
-                    'rgba(167, 139, 250, 0.8)', // Roxo
-                    'rgba(59, 130, 246, 0.8)',  // Azul
-                    'rgba(16, 185, 129, 0.8)', // Verde
-                    'rgba(239, 68, 68, 0.8)',   // Vermelho
-                    'rgba(245, 158, 11, 0.8)',  // Ambar
-                    'rgba(99, 102, 241, 0.8)',  // Indigo
+                    'rgba(167, 139, 250, 0.9)', // Roxo 1 (mais opaco)
+                    'rgba(59, 130, 246, 0.9)',  // Azul 1
+                    'rgba(16, 185, 129, 0.9)', // Verde 1
+                    'rgba(239, 68, 68, 0.9)',   // Vermelho 1
+                    'rgba(245, 158, 11, 0.9)',  // Ambar 1
+                    'rgba(99, 102, 241, 0.9)',  // Indigo 1
+                    'rgba(129, 140, 248, 0.9)', // Roxo claro (para mais itens)
+                    'rgba(139, 92, 246, 0.9)',  // Roxo mais escuro
+                    'rgba(74, 222, 128, 0.9)',  // Verde claro
+                    'rgba(251, 191, 36, 0.9)',  // Amarelo
                 ],
-                borderColor: '#1f2937', // Cor de fundo do card (slate-800)
+                borderColor: '#1e293b', // Cor de fundo do card (slate-800)
                 borderWidth: 2,
             },
         ],
@@ -53,9 +58,12 @@ export function GraficoDespesas({ dadosDoGrafico }: GraficoProps) {
             legend: {
                 position: 'right' as const, // Posiciona a legenda na direita
                 labels: {
-                    color: '#a7a3b3',
+                    color: '#a7a3b3', // Cor do texto da legenda
                     boxWidth: 20,
                     padding: 20,
+                    font: {
+                        size: 14 // Tamanho da fonte da legenda
+                    }
                 }
             },
             title: {
@@ -65,6 +73,9 @@ export function GraficoDespesas({ dadosDoGrafico }: GraficoProps) {
                 font: {
                     size: 18,
                     weight: 'bold' as 'bold',
+                },
+                padding: {
+                    bottom: 20
                 }
             },
             tooltip: {
@@ -73,13 +84,39 @@ export function GraficoDespesas({ dadosDoGrafico }: GraficoProps) {
                 bodyColor: '#cbd5e1',
                 padding: 10,
                 cornerRadius: 4,
+                callbacks: {
+                    label: function(context: any) {
+                        const label = context.label || '';
+                        const value = context.parsed || 0;
+                        const total = context.dataset.data.reduce((sum: number, val: number) => sum + val, 0);
+                        const percentage = ((value / total) * 100).toFixed(2);
+                        return `${label}: ${value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (${percentage}%)`;
+                    }
+                }
+            },
+            datalabels: { // Configuração do plugin datalabels
+                color: '#fff', // Cor do texto dos labels
+                font: {
+                    weight: 'bold' as 'bold',
+                    size: 14,
+                },
+                formatter: (value: number, context: any) => {
+                    const total = context.dataset.data.reduce((sum: number, val: number) => sum + val, 0);
+                    const percentage = (value / total) * 100;
+                    // Exibe apenas as porcentagens maiores que 5% para evitar sobreposição
+                    if (percentage > 5) {
+                        return percentage.toFixed(1) + '%';
+                    }
+                    return ''; // Não mostra label para fatias muito pequenas
+                },
+                textShadowBlur: 4, // Sombra para melhorar a legibilidade
+                textShadowColor: 'rgba(0,0,0,0.6)',
             }
         },
-        // Gráficos de pizza não usam escalas (scales)
     };
 
     return (
-        <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg ring-1 ring-white/10" style={{ position: 'relative', height: '400px' }}>
+        <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg ring-1 ring-white/10" style={{ position: 'relative', height: '450px' }}> {/* Aumentado um pouco a altura */}
             <Pie options={options} data={data} />
         </div>
     );
