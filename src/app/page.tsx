@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ListChecks, Wallet, BarChart2, Calendar as CalendarIcon, Search, AlertTriangle } from 'lucide-react';
+import { GraficoDespesas } from "@/components/dashboard/GraficoDespesas";
 
-// --- Funções Auxiliares para Datas ---
+// --- Funções Auxiliares e Tipagens ---
 const toInputDate = (date: Date): string => date.toISOString().split('T')[0];
 const toApiDate = (dateString: string): string => {
   if (!dateString) return '';
@@ -14,10 +15,7 @@ const toBrazilianFormat = (dateString: string): string => {
     if (!dateString) return '...';
     return toApiDate(dateString);
 }
-
 type Periodo = 'este-mes' | 'mes-passado' | 'este-ano' | null;
-
-// --- Tipagem dos Dados do Dashboard ---
 interface DadosDashboard {
   totalLancamentos: number;
   valorTotal: number;
@@ -46,9 +44,7 @@ export default function DashboardPage() {
       const url = `/api/omie?${params.toString()}`;
       
       const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error('Falha ao buscar dados do servidor.');
-      }
+      if (!response.ok) { throw new Error('Falha ao buscar dados do servidor.'); }
       const data = await response.json();
       setDados(data);
       setPeriodoExibido({ inicio, fim });
@@ -94,6 +90,22 @@ export default function DashboardPage() {
     fetchData(dataInicio, dataFim);
   };
   
+  const dadosParaGrafico = useMemo(() => {
+    if (!dados || !dados.lancamentos) {
+      return { labels: [], valores: [] };
+    }
+    const gastosPorFornecedor = dados.lancamentos.reduce((acc, lancamento) => {
+      acc[lancamento.fornecedor] = (acc[lancamento.fornecedor] || 0) + lancamento.valor;
+      return acc;
+    }, {} as Record<string, number>);
+
+    const sorted = Object.entries(gastosPorFornecedor).sort(([, a], [, b]) => b - a);
+    return {
+      labels: sorted.map(([nome]) => nome),
+      valores: sorted.map(([, valor]) => valor),
+    };
+  }, [dados]);
+
   if (isLoading) {
     return (
       <main className="flex flex-col items-center justify-center min-h-screen bg-slate-900">
@@ -121,7 +133,7 @@ export default function DashboardPage() {
         <p className="text-slate-400 mt-1">Análise de despesas com fornecedores de internet.</p>
       </header>
 
-      <div className="bg-slate-800/50 p-4 rounded-xl shadow-lg mb-4 flex flex-col gap-4 ring-1 ring-white/10">
+      <div className="bg-slate-800/50 p-4 rounded-xl shadow-lg mb-8 flex flex-col gap-4 ring-1 ring-white/10">
         <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-medium text-slate-400 mr-2">Períodos Rápidos:</span>
             <button onClick={() => handlePresetClick('este-mes')} className={`px-3 py-1 text-sm rounded-full transition-colors ${activePreset === 'este-mes' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Este Mês</button>
@@ -149,16 +161,10 @@ export default function DashboardPage() {
             </button>
         </div>
       </div>
-
-      <div className="mb-8 text-center sm:text-left">
-        <p className="text-sm text-slate-500">
-            Exibindo resultados para o período de <span className="font-semibold text-slate-400">{toBrazilianFormat(periodoExibido.inicio)}</span> até <span className="font-semibold text-slate-400">{toBrazilianFormat(periodoExibido.fim)}</span>
-        </p>
-      </div>
       
       {dados && dados.totalLancamentos > 0 ? (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             <div className="bg-slate-800 p-6 rounded-xl shadow-lg flex items-center space-x-4 ring-1 ring-white/10">
                 <div className="bg-blue-900/50 p-3 rounded-full"><ListChecks className="h-6 w-6 text-blue-400" /></div>
                 <div>
@@ -181,30 +187,34 @@ export default function DashboardPage() {
                 </div>
             </div>
           </div>
-          <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg overflow-x-auto ring-1 ring-white/10">
-            <h2 className="text-xl font-bold mb-4 text-white">Lançamentos</h2>
-            <div className="min-w-full">
+
+          <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
+            <div className="xl:col-span-3">
+              <GraficoDespesas dadosDoGrafico={dadosParaGrafico} />
+            </div>
+            <div className="bg-slate-800 p-4 sm:p-6 rounded-xl shadow-lg ring-1 ring-white/10 xl:col-span-2">
+              <h2 className="text-xl font-bold mb-4 text-white">Lançamentos Recentes</h2>
+              <div className="overflow-y-auto h-96">
                 <table className="w-full text-left">
-                    <thead>
-                        <tr>
-                            <th className="py-3 px-4 text-xs uppercase tracking-wider font-bold text-slate-400">Fornecedor</th>
-                            <th className="py-3 px-4 text-xs uppercase tracking-wider font-bold text-slate-400">Vencimento</th>
-                            <th className="py-3 px-4 text-xs uppercase tracking-wider font-bold text-slate-400 text-right">Valor</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-700">
-                        {dados.lancamentos.map((lanc, index) => (
-                        <tr key={index} className="hover:bg-slate-700/50">
-                            <td className="py-4 px-4 font-medium text-slate-200">{lanc.fornecedor}</td>
-                            <td className="py-4 px-4 text-slate-400">{lanc.vencimento}</td>
-                            <td className="py-4 px-4 text-slate-200 font-semibold text-right">{lanc.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
-                        </tr>
-                        ))}
-                    </tbody>
+                  <thead>
+                    <tr>
+                      <th className="py-3 px-4 text-xs uppercase tracking-wider font-bold text-slate-400 sticky top-0 bg-slate-800">Fornecedor</th>
+                      <th className="py-3 px-4 text-xs uppercase tracking-wider font-bold text-slate-400 text-right sticky top-0 bg-slate-800">Valor</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700">
+                    {dados.lancamentos.map((lanc, index) => (
+                      <tr key={index} className="hover:bg-slate-700/50">
+                        <td className="py-3 px-4 font-medium text-slate-200">{lanc.fornecedor}</td>
+                        <td className="py-3 px-4 text-slate-200 font-semibold text-right">{lanc.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
+              </div>
             </div>
           </div>
-        </>
+        </div>
       ) : (
         <div className="bg-slate-800 p-8 rounded-xl shadow-lg text-center flex flex-col items-center ring-1 ring-white/10">
             <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />
