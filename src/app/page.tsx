@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { AlertTriangle } from 'lucide-react';
+import { ListChecks, Wallet, BarChart2, Calendar as CalendarIcon, Search, AlertTriangle } from 'lucide-react';
 import { GraficoDespesas } from "@/components/dashboard/GraficoDespesas";
 import { FiltrosDashboard } from "@/components/dashboard/FiltrosDashboard";
 import { CardsResumo } from "@/components/dashboard/CardsResumo";
 import { TabelaLancamentos } from "@/components/dashboard/TabelaLancamentos";
+import { ResumoPorFornecedor } from "@/components/dashboard/ResumoPorFornecedor";
 
-// --- Tipagens ---
+// --- Funções Auxiliares e Tipagens ---
 const toInputDate = (date: Date): string => date.toISOString().split('T')[0];
 const toApiDate = (dateString: string): string => {
   if (!dateString) return '';
@@ -33,7 +34,6 @@ export default function DashboardPage() {
   const [dados, setDados] = useState<DadosDashboard | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
   const [dataInicio, setDataInicio] = useState('');
   const [dataFim, setDataFim] = useState('');
   const [activePreset, setActivePreset] = useState<Periodo>('este-mes');
@@ -45,7 +45,6 @@ export default function DashboardPage() {
       setError(null);
       const params = new URLSearchParams({ de: toApiDate(inicio), ate: toApiDate(fim) });
       const url = `/api/omie?${params.toString()}`;
-      
       const response = await fetch(url);
       if (!response.ok) { throw new Error('Falha ao buscar dados do servidor.'); }
       const data = await response.json();
@@ -93,15 +92,23 @@ export default function DashboardPage() {
     fetchData(dataInicio, dataFim);
   };
   
-  const dadosParaGrafico = useMemo(() => {
-    if (!dados || !dados.lancamentos) return { labels: [], valores: [] };
-    const gastos = dados.lancamentos.reduce((acc, l) => {
-      acc[l.fornecedor] = (acc[l.fornecedor] || 0) + l.valor;
+  const gastosPorFornecedor = useMemo(() => {
+    if (!dados || !dados.lancamentos) {
+      return [];
+    }
+    const gastos = dados.lancamentos.reduce((acc, lancamento) => {
+      acc[lancamento.fornecedor] = (acc[lancamento.fornecedor] || 0) + lancamento.valor;
       return acc;
     }, {} as Record<string, number>);
-    const sorted = Object.entries(gastos).sort(([, a], [, b]) => b - a);
-    return { labels: sorted.map(([n]) => n), valores: sorted.map(([, v]) => v) };
+    return Object.entries(gastos)
+      .map(([nome, valor]) => ({ nome, valor }))
+      .sort((a, b) => b.valor - a.valor);
   }, [dados]);
+  
+  const dadosParaGrafico = {
+    labels: gastosPorFornecedor.map(item => item.nome),
+    valores: gastosPorFornecedor.map(item => item.valor),
+  };
 
   if (isLoading) {
     return (
@@ -111,7 +118,6 @@ export default function DashboardPage() {
       </main>
     );
   }
-
   if (error) {
     return (
       <main className="flex items-center justify-center min-h-screen bg-slate-900 text-red-400">
@@ -150,7 +156,10 @@ export default function DashboardPage() {
       {dados && dados.totalLancamentos > 0 ? (
         <div className="space-y-8">
           <CardsResumo dados={dados} />
-          <GraficoDespesas dadosDoGrafico={dadosParaGrafico} />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            <GraficoDespesas dadosDoGrafico={dadosParaGrafico} />
+            <ResumoPorFornecedor gastosPorFornecedor={gastosPorFornecedor} />
+          </div>
           <TabelaLancamentos lancamentos={dados.lancamentos} />
         </div>
       ) : (
