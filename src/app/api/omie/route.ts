@@ -2,44 +2,33 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import * as OmieService from '@/lib/omie.service';
-import { Cliente } from '@/lib/omie.service'; // Supondo que você exporte essa interface
+import { Cliente } from '@/lib/omie.service';
 
 export const dynamic = 'force-dynamic';
 
 const IDS_FORNECEDORES_INTERNET = [5202017644, 4807594778, 4807594928];
 
-// --- NOSSO CACHE SIMPLES EM MEMÓRIA ---
-// Guardará a lista de clientes para não buscá-la toda hora.
 let cachedClientes: { data: Cliente[]; timestamp: number } | null = null;
-const CACHE_DURATION_MS = 10 * 60 * 1000; // Cache de 10 minutos
+const CACHE_DURATION_MS = 10 * 60 * 1000;
 
 async function getClientesComCache(): Promise<Cliente[]> {
     const agora = Date.now();
-
-    // Se o cache existe E não expirou, retorna os dados do cache
     if (cachedClientes && (agora - cachedClientes.timestamp) < CACHE_DURATION_MS) {
         console.log("CACHE: Retornando clientes do cache.");
         return cachedClientes.data;
     }
-
-    // Se não, busca os dados na API
     console.log("CACHE: Cache expirado ou inexistente. Buscando clientes na API...");
     const novosClientes = await OmieService.buscarTodosOsClientes();
-    
-    // Atualiza o cache com os novos dados e o timestamp atual
     cachedClientes = {
         data: novosClientes,
         timestamp: agora,
     };
-    
     return novosClientes;
 }
 
-
-// --- O ENDPOINT DA API OTIMIZADO ---
 export async function GET(request: NextRequest) {
     try {
-        // Lógica de datas (permanece igual)
+        // ... (toda a sua lógica de sucesso permanece exatamente a mesma)
         const { searchParams } = new URL(request.url);
         let dataDe = searchParams.get('de');
         let dataAte = searchParams.get('ate');
@@ -54,14 +43,11 @@ export async function GET(request: NextRequest) {
         
         console.log(`API Route: Endpoint chamado para o período: ${dataDe} a ${dataAte}`);
 
-        // 1. DISPARAMOS AS BUSCAS EM PARALELO
-        // A busca de clientes agora usa nossa função com cache.
         const [todosOsClientes, todasAsContasDaAPI] = await Promise.all([
             getClientesComCache(),
             OmieService.buscarTodasContasAPagarDoPeriodo(dataDe, dataAte)
         ]);
         
-        // Lógica de processamento e filtragem (permanece a mesma, pois já era eficiente)
         const parseDate = (dateStr: string): Date => {
             const [day, month, year] = dateStr.split('/').map(Number);
             return new Date(year, month - 1, day);
@@ -77,7 +63,6 @@ export async function GET(request: NextRequest) {
 
         console.log(`API Route: ${todasAsContasDaAPI.length} contas recebidas do serviço. ${contasRealmenteNoPeriodo.length} estão no período correto.`);
         
-        // Uso de Map e Set já é otimizado, mantemos como está
         const mapaDeNomes = new Map<number, string>();
         todosOsClientes.forEach(cliente => mapaDeNomes.set(cliente.codigo_cliente_omie, cliente.nome_fantasia));
         
@@ -86,17 +71,13 @@ export async function GET(request: NextRequest) {
         
         const valorTotal = contasDeInternet.reduce((acc, conta) => acc + conta.valor_documento, 0);
         
-        // 2. OTIMIZAÇÃO NA ORDENAÇÃO
-        // Evitamos criar Datas repetidamente dentro do sort, o que melhora a performance.
         const lancamentosOrdenados = contasDeInternet.map(conta => ({
             fornecedor: mapaDeNomes.get(conta.codigo_cliente_fornecedor) || "Desconhecido",
             valor: conta.valor_documento,
             vencimento: conta.data_vencimento,
-            // Criamos a data uma única vez para ordenação
             _vencimentoDate: parseDate(conta.data_vencimento)
         }))
         .sort((a, b) => b._vencimentoDate.getTime() - a._vencimentoDate.getTime())
-        // Removemos o campo auxiliar após a ordenação
         .map(({ _vencimentoDate, ...resto }) => resto);
 
         const resultado = {
@@ -106,8 +87,43 @@ export async function GET(request: NextRequest) {
         };
         
         return NextResponse.json(resultado);
+
     } catch (error) {
         console.error("Erro no endpoint da API:", error);
-        return NextResponse.json({ message: "Erro ao buscar dados da Omie." }, { status: 500 });
+
+        // --- INÍCIO DA TRATATIVA DE ERRO ---
+        const errorMessage = error instanceof Error ? error.message : "Ocorreu um erro desconhecido.";
+
+        // Verifica se o erro foi de timeout ou outro problema de conexão com a Omie
+        if (errorMessage.includes('Timeout') || errorMessage.toLowerCase().includes('fetch failed')) {
+            return NextResponse.json(
+                { 
+                  title: "Problema no servidor da Omie",
+                  message: "Não foi possível carregar os dados no momento. Por favor, tente novamente em alguns instantes." 
+                }, 
+                { status: 503 } // 503 Service Unavailable
+            );
+        }
+
+        // Para outros erros da Omie, repassa a mensagem
+        if (error instanceof Error) {
+            return NextResponse.json(
+                {
+                    title: "Erro retornado pela Omie",
+                    message: error.message
+                },
+                { status: 400 } // 400 Bad Request
+            )
+        }
+
+        // Para qualquer outro tipo de erro, retorna uma mensagem genérica
+        return NextResponse.json(
+            { 
+              title: "Erro Interno no Servidor",
+              message: "Ocorreu um erro inesperado ao processar sua solicitação." 
+            }, 
+            { status: 500 }
+        );
+        // --- FIM DA TRATATIVA DE ERRO ---
     }
 }

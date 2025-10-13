@@ -1,9 +1,13 @@
 // --- CONFIGURAÇÃO ---
-// Lemos as variáveis de ambiente aqui, no local que se comunica com a API externa.
 const OMIE_APP_KEY = process.env.OMIE_APP_KEY;
 const OMIE_APP_SECRET = process.env.OMIE_APP_SECRET;
 
-// --- INTERFACES (Exportamos para que a route.ts também possa usá-las) ---
+// Validação para garantir que as chaves da API estão definidas
+if (!OMIE_APP_KEY || !OMIE_APP_SECRET) {
+    throw new Error("As variáveis de ambiente OMIE_APP_KEY e OMIE_APP_SECRET não foram definidas.");
+}
+
+// --- INTERFACES ---
 export interface ContaPagar {
   codigo_cliente_fornecedor: number;
   valor_documento: number;
@@ -15,24 +19,43 @@ export interface Cliente {
   nome_fantasia: string;
 }
 
-// --- FUNÇÕES DE LÓGICA DE BUSCA ---
+// --- FUNÇÃO DE LÓGICA DE BUSCA ---
 
-// Esta função é privada ao serviço, pois só é usada internamente.
+// Esta função agora inclui o controle de timeout
 async function consultarOmie(call: string, params: any, endpointUrl: string) {
     const fullUrl = `https://app.omie.com.br/api/v1${endpointUrl}`;
     const requestBody = { "call": call, "app_key": OMIE_APP_KEY, "app_secret": OMIE_APP_SECRET, "param": [params] };
+    
+    // Controller para o timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
+
     try {
-        const response = await fetch(fullUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(requestBody) });
+        const response = await fetch(fullUrl, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(requestBody),
+            signal: controller.signal // Conecta o fetch ao controller
+        });
+        
+        clearTimeout(timeoutId); // Limpa o timeout se a resposta chegar a tempo
+
         const data = await response.json();
-        if (!response.ok || data.faultstring) { throw new Error(data.faultstring || response.statusText); }
+        if (!response.ok || data.faultstring) { 
+            throw new Error(data.faultstring || `Erro HTTP: ${response.status}`); 
+        }
         return data;
     } catch (error) {
-        console.error(`Falha ao buscar página: ${error instanceof Error ? error.message : String(error)}`);
+        clearTimeout(timeoutId);
+        if (error instanceof Error && error.name === 'AbortError') {
+            throw new Error('A requisição para a API Omie demorou muito para responder (Timeout).');
+        }
+        console.error(`Falha ao consultar Omie (${call}): ${error instanceof Error ? error.message : String(error)}`);
         throw error;
     }
 }
 
-// Exportamos as funções que a nossa API Route vai precisar consumir.
+// O restante do arquivo permanece igual
 export async function buscarTodosOsClientes(): Promise<Cliente[]> {
     console.log("Service: Iniciando busca de todos os clientes...");
     const primeiraPagina = await consultarOmie("ListarClientes", { "pagina": 1, "registros_por_pagina": 500 }, "/geral/clientes/");
