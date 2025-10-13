@@ -1,16 +1,45 @@
+// src/app/api/omie/route.ts
+
 import { NextResponse, type NextRequest } from 'next/server';
-// Importamos as funções do nosso novo serviço e as interfaces que ele exporta
 import * as OmieService from '@/lib/omie.service';
+import { Cliente } from '@/lib/omie.service'; // Supondo que você exporte essa interface
 
 export const dynamic = 'force-dynamic';
 
-// A lista de IDs de fornecedores agora é a única configuração que fica na API Route,
-// pois ela é específica para a regra de negócio deste endpoint.
 const IDS_FORNECEDORES_INTERNET = [5202017644, 4807594778, 4807594928];
 
-// --- O ENDPOINT DA API (AGORA MUITO MAIS LIMPO) ---
+// --- NOSSO CACHE SIMPLES EM MEMÓRIA ---
+// Guardará a lista de clientes para não buscá-la toda hora.
+let cachedClientes: { data: Cliente[]; timestamp: number } | null = null;
+const CACHE_DURATION_MS = 10 * 60 * 1000; // Cache de 10 minutos
+
+async function getClientesComCache(): Promise<Cliente[]> {
+    const agora = Date.now();
+
+    // Se o cache existe E não expirou, retorna os dados do cache
+    if (cachedClientes && (agora - cachedClientes.timestamp) < CACHE_DURATION_MS) {
+        console.log("CACHE: Retornando clientes do cache.");
+        return cachedClientes.data;
+    }
+
+    // Se não, busca os dados na API
+    console.log("CACHE: Cache expirado ou inexistente. Buscando clientes na API...");
+    const novosClientes = await OmieService.buscarTodosOsClientes();
+    
+    // Atualiza o cache com os novos dados e o timestamp atual
+    cachedClientes = {
+        data: novosClientes,
+        timestamp: agora,
+    };
+    
+    return novosClientes;
+}
+
+
+// --- O ENDPOINT DA API OTIMIZADO ---
 export async function GET(request: NextRequest) {
     try {
+        // Lógica de datas (permanece igual)
         const { searchParams } = new URL(request.url);
         let dataDe = searchParams.get('de');
         let dataAte = searchParams.get('ate');
@@ -25,13 +54,14 @@ export async function GET(request: NextRequest) {
         
         console.log(`API Route: Endpoint chamado para o período: ${dataDe} a ${dataAte}`);
 
-        // Delega as buscas para o OmieService, executando em sequência para evitar rate limit.
-        const todosOsClientes = await OmieService.buscarTodosOsClientes();
-        const todasAsContasDaAPI = await OmieService.buscarTodasContasAPagarDoPeriodo(dataDe, dataAte);
+        // 1. DISPARAMOS AS BUSCAS EM PARALELO
+        // A busca de clientes agora usa nossa função com cache.
+        const [todosOsClientes, todasAsContasDaAPI] = await Promise.all([
+            getClientesComCache(),
+            OmieService.buscarTodasContasAPagarDoPeriodo(dataDe, dataAte)
+        ]);
         
-        // A lógica de processamento e filtragem continua aqui, pois é a
-        // responsabilidade da API Route preparar a resposta para o frontend.
-
+        // Lógica de processamento e filtragem (permanece a mesma, pois já era eficiente)
         const parseDate = (dateStr: string): Date => {
             const [day, month, year] = dateStr.split('/').map(Number);
             return new Date(year, month - 1, day);
@@ -47,6 +77,7 @@ export async function GET(request: NextRequest) {
 
         console.log(`API Route: ${todasAsContasDaAPI.length} contas recebidas do serviço. ${contasRealmenteNoPeriodo.length} estão no período correto.`);
         
+        // Uso de Map e Set já é otimizado, mantemos como está
         const mapaDeNomes = new Map<number, string>();
         todosOsClientes.forEach(cliente => mapaDeNomes.set(cliente.codigo_cliente_omie, cliente.nome_fantasia));
         
@@ -55,14 +86,23 @@ export async function GET(request: NextRequest) {
         
         const valorTotal = contasDeInternet.reduce((acc, conta) => acc + conta.valor_documento, 0);
         
+        // 2. OTIMIZAÇÃO NA ORDENAÇÃO
+        // Evitamos criar Datas repetidamente dentro do sort, o que melhora a performance.
+        const lancamentosOrdenados = contasDeInternet.map(conta => ({
+            fornecedor: mapaDeNomes.get(conta.codigo_cliente_fornecedor) || "Desconhecido",
+            valor: conta.valor_documento,
+            vencimento: conta.data_vencimento,
+            // Criamos a data uma única vez para ordenação
+            _vencimentoDate: parseDate(conta.data_vencimento)
+        }))
+        .sort((a, b) => b._vencimentoDate.getTime() - a._vencimentoDate.getTime())
+        // Removemos o campo auxiliar após a ordenação
+        .map(({ _vencimentoDate, ...resto }) => resto);
+
         const resultado = {
             totalLancamentos: contasDeInternet.length,
             valorTotal: valorTotal,
-            lancamentos: contasDeInternet.map(conta => ({
-                fornecedor: mapaDeNomes.get(conta.codigo_cliente_fornecedor) || "Desconhecido",
-                valor: conta.valor_documento,
-                vencimento: conta.data_vencimento,
-            })).sort((a, b) => new Date(b.vencimento.split('/').reverse().join('-')).getTime() - new Date(a.vencimento.split('/').reverse().join('-')).getTime()),
+            lancamentos: lancamentosOrdenados,
         };
         
         return NextResponse.json(resultado);
