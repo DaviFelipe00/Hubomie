@@ -98,15 +98,16 @@ export function FiltrosDashboard({
 
       <div className="flex flex-col md:flex-row md:items-end gap-4 pt-4 border-t border-slate-700">
 
-        {/* --- ALTERAÇÃO AQUI: de "flex-col sm:flex-row" para "flex-row" --- */}
         <div className="w-full flex flex-row gap-4">
           <div className="flex-1 min-w-0">
             <label htmlFor="dataInicio" className="block text-sm font-medium text-slate-400 mb-1">Data de Início:</label>
-            <input type="date" id="dataInicio" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
+            {/* --- ALTERAÇÃO AQUI: adicionado "text-left" --- */}
+            <input type="date" id="dataInicio" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200 text-left" style={{ colorScheme: 'dark' }} />
           </div>
           <div className="flex-1 min-w-0">
             <label htmlFor="dataFim" className="block text-sm font-medium text-slate-400 mb-1">Data Final:</label>
-            <input type="date" id="dataFim" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
+             {/* --- ALTERAÇÃO AQUI: adicionado "text-left" --- */}
+            <input type="date" id="dataFim" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200 text-left" style={{ colorScheme: 'dark' }} />
           </div>
         </div>
 
