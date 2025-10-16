@@ -1,17 +1,17 @@
-// --- CONFIGURAÇÃO ---
+// src/lib/omie.service.ts
+
 const OMIE_APP_KEY = process.env.OMIE_APP_KEY;
 const OMIE_APP_SECRET = process.env.OMIE_APP_SECRET;
 
-// Validação para garantir que as chaves da API estão definidas
 if (!OMIE_APP_KEY || !OMIE_APP_SECRET) {
     throw new Error("As variáveis de ambiente OMIE_APP_KEY e OMIE_APP_SECRET não foram definidas.");
 }
 
-// --- INTERFACES ---
 export interface ContaPagar {
   codigo_cliente_fornecedor: number;
   valor_documento: number;
   data_vencimento: string;
+  data_pagamento: string;
   observacao: string;
 }
 export interface Cliente {
@@ -19,26 +19,22 @@ export interface Cliente {
   nome_fantasia: string;
 }
 
-// --- FUNÇÃO DE LÓGICA DE BUSCA ---
-
-// Esta função agora inclui o controle de timeout
 async function consultarOmie(call: string, params: any, endpointUrl: string) {
     const fullUrl = `https://app.omie.com.br/api/v1${endpointUrl}`;
     const requestBody = { "call": call, "app_key": OMIE_APP_KEY, "app_secret": OMIE_APP_SECRET, "param": [params] };
     
-    // Controller para o timeout
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 segundos de timeout
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
     try {
         const response = await fetch(fullUrl, { 
             method: 'POST', 
             headers: { 'Content-Type': 'application/json' }, 
             body: JSON.stringify(requestBody),
-            signal: controller.signal // Conecta o fetch ao controller
+            signal: controller.signal
         });
         
-        clearTimeout(timeoutId); // Limpa o timeout se a resposta chegar a tempo
+        clearTimeout(timeoutId);
 
         const data = await response.json();
         if (!response.ok || data.faultstring) { 
@@ -55,9 +51,8 @@ async function consultarOmie(call: string, params: any, endpointUrl: string) {
     }
 }
 
-// O restante do arquivo permanece igual
 export async function buscarTodosOsClientes(): Promise<Cliente[]> {
-    console.log("Service: Iniciando busca de todos os clientes...");
+    // Esta função permanece a mesma e está correta
     const primeiraPagina = await consultarOmie("ListarClientes", { "pagina": 1, "registros_por_pagina": 500 }, "/geral/clientes/");
     if (!primeiraPagina || !primeiraPagina.clientes_cadastro) return [];
     
@@ -72,20 +67,27 @@ export async function buscarTodosOsClientes(): Promise<Cliente[]> {
             }
         }
     }
-    console.log(`Service: ${todosOsClientes.length} clientes/fornecedores carregados.`);
     return todosOsClientes;
 }
 
+// --- LÓGICA CORRIGIDA ---
+// Voltamos a usar o filtro por "data de" (emissão), que é o que a API aceita.
 export async function buscarTodasContasAPagarDoPeriodo(dataDe: string, dataAte: string): Promise<ContaPagar[]> {
-    console.log(`Service: Iniciando busca de contas a pagar de ${dataDe} a ${dataAte}...`);
-    const params = { "pagina": 1, "registros_por_pagina": 500, "filtrar_por_data_de": dataDe, "filtrar_por_data_ate": dataAte };
+    console.log(`Service: Buscando contas LANÇADAS de ${dataDe} a ${dataAte}...`);
+    
+    const params = { 
+        "pagina": 1, 
+        "registros_por_pagina": 500, 
+        "filtrar_por_data_de": dataDe, 
+        "filtrar_por_data_ate": dataAte 
+    };
+
     const primeiraPagina = await consultarOmie("ListarContasPagar", params, "/financas/contapagar/");
     if (!primeiraPagina || !primeiraPagina.conta_pagar_cadastro) return [];
 
     let todasAsContas = primeiraPagina.conta_pagar_cadastro;
     const totalDePaginas = primeiraPagina.total_de_paginas;
     
-    console.log(`Service: Total de ${primeiraPagina.total_de_registros} contas encontradas em ${totalDePaginas} páginas.`);
     if (totalDePaginas > 1) {
         for (let i = 2; i <= totalDePaginas; i++) {
             const paginaResult = await consultarOmie("ListarContasPagar", { ...params, pagina: i }, "/financas/contapagar/");
@@ -94,6 +96,6 @@ export async function buscarTodasContasAPagarDoPeriodo(dataDe: string, dataAte: 
             }
         }
     }
-    console.log(`Service: Busca de contas finalizada. Total de ${todasAsContas.length} contas carregadas da API.`);
+    console.log(`Service: Busca de contas por lançamento finalizada. Total de ${todasAsContas.length} contas carregadas.`);
     return todasAsContas;
 }

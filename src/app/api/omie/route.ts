@@ -49,31 +49,33 @@ export async function GET(request: NextRequest) {
             return new Date(year, month - 1, day);
         };
 
-        // --- FILTRO ADICIONAL PARA GARANTIR A DATA DE VENCIMENTO ---
+        // --- FILTRO FINAL PELA DATA DE PAGAMENTO ---
         const dataInicioFiltro = parseDate(dataDe);
         const dataFimFiltro = parseDate(dataAte);
 
-        const contasNoPeriodoDeVencimento = todasAsContasDaAPI.filter(conta => {
-            if (!conta.data_vencimento) return false;
-            const dataVencimento = parseDate(conta.data_vencimento);
-            return dataVencimento >= dataInicioFiltro && dataVencimento <= dataFimFiltro;
+        const contasPagasNoPeriodo = todasAsContasDaAPI.filter(conta => {
+            // Mantém a conta apenas se ela tiver uma data de pagamento
+            if (!conta.data_pagamento) return false;
+            
+            // Verifica se a data de pagamento está dentro do período selecionado
+            const dataPagamento = parseDate(conta.data_pagamento);
+            return dataPagamento >= dataInicioFiltro && dataPagamento <= dataFimFiltro;
         });
-        // --- FIM DO FILTRO ADICIONAL ---
+        // --- FIM DO FILTRO ---
 
         const mapaDeNomes = new Map<number, string>();
         todosOsClientes.forEach(cliente => mapaDeNomes.set(cliente.codigo_cliente_omie, cliente.nome_fantasia));
         
         const idSet = new Set(idsParaFiltrar);
-        // Agora filtramos a lista que já foi verificada pela data de vencimento
-        const contasFiltradas = contasNoPeriodoDeVencimento.filter(conta => idSet.has(conta.codigo_cliente_fornecedor));
+        const contasFiltradas = contasPagasNoPeriodo.filter(conta => idSet.has(conta.codigo_cliente_fornecedor));
         
         const valorTotal = contasFiltradas.reduce((acc, conta) => acc + conta.valor_documento, 0);
         
         const lancamentosOrdenados = contasFiltradas.map(conta => ({
             fornecedor: mapaDeNomes.get(conta.codigo_cliente_fornecedor) || "Desconhecido",
             valor: conta.valor_documento,
-            vencimento: conta.data_vencimento,
-        })).sort((a, b) => parseDate(b.vencimento).getTime() - parseDate(a.vencimento).getTime());
+            pagamento: conta.data_pagamento, // Retorna a data de pagamento para a tabela
+        })).sort((a, b) => parseDate(b.pagamento).getTime() - parseDate(a.pagamento).getTime());
 
         return NextResponse.json({
             totalLancamentos: contasFiltradas.length,
