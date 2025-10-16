@@ -1,6 +1,6 @@
 "use client";
 
-import { Calendar as CalendarIcon, Search, ChevronDown, Check } from 'lucide-react';
+import { Search, ChevronDown, Check } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 
 type Periodo = 'este-mes' | 'mes-passado' | 'este-ano' | null;
@@ -24,8 +24,7 @@ interface FiltrosProps {
   setFornecedoresSelecionados: (ids: number[]) => void;
 }
 
-// O componente interno FiltroFornecedores permanece o mesmo
-
+// O componente interno FiltroFornecedores não precisa de alterações
 function FiltroFornecedores({ fornecedores, selecionados, setSelecionados }: { fornecedores: Fornecedor[], selecionados: number[], setSelecionados: (ids: number[]) => void }) {
   const [isOpen, setIsOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -47,9 +46,9 @@ function FiltroFornecedores({ fornecedores, selecionados, setSelecionados }: { f
       setSelecionados([...selecionados, id]);
     }
   };
-  
-  const textoBotao = selecionados.length === 0 
-    ? "Todos Fornecedores" 
+
+  const textoBotao = selecionados.length === 0
+    ? "Todos Fornecedores"
     : selecionados.length === 1
     ? `${fornecedores.find(f => f.id === selecionados[0])?.nome}`
     : `${selecionados.length} fornecedores selecionados`;
@@ -87,43 +86,37 @@ export function FiltrosDashboard({
 }: FiltrosProps) {
   return (
     <div className="bg-slate-800/50 p-4 rounded-xl shadow-lg mb-8 flex flex-col gap-4 ring-1 ring-white/10">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-medium text-slate-400 mr-2">Períodos Rápidos:</span>
-        <button onClick={() => handlePresetClick('este-mes')} className={`px-3 py-1 text-sm rounded-full transition-colors ${activePreset === 'este-mes' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Este Mês</button>
-        <button onClick={() => handlePresetClick('mes-passado')} className={`px-3 py-1 text-sm rounded-full transition-colors ${activePreset === 'mes-passado' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Mês Passado</button>
-        <button onClick={() => handlePresetClick('este-ano')} className={`px-3 py-1 text-sm rounded-full transition-colors ${activePreset === 'este-ano' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Este Ano</button>
+
+      {/* --- ALTERAÇÃO AQUI: NOVA ESTRUTURA PARA OS PERÍODOS --- */}
+      <div>
+        <span className="block text-sm font-medium text-slate-400 mb-2">Períodos:</span>
+        <div className="flex items-center gap-2 overflow-x-auto pb-2">
+            <button onClick={() => handlePresetClick('este-mes')} className={`px-3 py-1 text-sm rounded-full transition-colors flex-shrink-0 ${activePreset === 'este-mes' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Este Mês</button>
+            <button onClick={() => handlePresetClick('mes-passado')} className={`px-3 py-1 text-sm rounded-full transition-colors flex-shrink-0 ${activePreset === 'mes-passado' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Mês Passado</button>
+            <button onClick={() => handlePresetClick('este-ano')} className={`px-3 py-1 text-sm rounded-full transition-colors flex-shrink-0 ${activePreset === 'este-ano' ? 'bg-purple-600 text-white' : 'bg-slate-700 hover:bg-slate-600'}`}>Este Ano</button>
+        </div>
       </div>
-      
-      {/* --- LAYOUT RESPONSIVO APLICADO AQUI --- */}
-      {/* Em telas pequenas (mobile), os itens ficam em coluna. Em telas médias (md) ou maiores, ficam em linha. */}
+
+      {/* --- SEÇÃO DE FILTROS PRINCIPAIS --- */}
       <div className="flex flex-col md:flex-row md:items-end gap-4 pt-4 border-t border-slate-700">
-        
-        {/* Agrupamento dos seletores de data */}
+
         <div className="w-full flex flex-col sm:flex-row gap-4">
           <div className="flex-1 min-w-0">
             <label htmlFor="dataInicio" className="block text-sm font-medium text-slate-400 mb-1">Data de Início:</label>
-            <div className="relative">
-              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 pointer-events-none" />
-              <input type="date" id="dataInicio" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="pl-10 p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
-            </div>
+            <input type="date" id="dataInicio" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
           </div>
           <div className="flex-1 min-w-0">
             <label htmlFor="dataFim" className="block text-sm font-medium text-slate-400 mb-1">Data Final:</label>
-            <div className="relative">
-              <CalendarIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-slate-500 pointer-events-none" />
-              <input type="date" id="dataFim" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="pl-10 p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
-            </div>
+            <input type="date" id="dataFim" value={dataFim} onChange={(e) => setDataFim(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
           </div>
         </div>
 
-        {/* Filtro de Fornecedores */}
         <FiltroFornecedores
           fornecedores={fornecedores}
           selecionados={fornecedoresSelecionados}
           setSelecionados={setFornecedoresSelecionados}
         />
 
-        {/* Botão de Filtrar (ocupa a largura total no mobile) */}
         <button onClick={handleFiltrarClick} disabled={isLoading} className="w-full md:w-auto bg-purple-600 text-white font-bold py-2.5 px-6 rounded-md hover:bg-purple-700 flex items-center justify-center gap-2 transition-colors disabled:bg-purple-800 disabled:cursor-not-allowed">
           <Search className="h-5 w-5" />
           {isLoading ? "Buscando..." : "Filtrar"}
