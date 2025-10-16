@@ -87,7 +87,6 @@ export function FiltrosDashboard({
   return (
     <div className="bg-slate-800/50 p-4 rounded-xl shadow-lg mb-8 flex flex-col gap-4 ring-1 ring-white/10">
 
-      {/* --- ALTERAÇÃO AQUI: NOVA ESTRUTURA PARA OS PERÍODOS --- */}
       <div>
         <span className="block text-sm font-medium text-slate-400 mb-2">Períodos:</span>
         <div className="flex items-center gap-2 overflow-x-auto pb-2">
@@ -97,10 +96,10 @@ export function FiltrosDashboard({
         </div>
       </div>
 
-      {/* --- SEÇÃO DE FILTROS PRINCIPAIS --- */}
       <div className="flex flex-col md:flex-row md:items-end gap-4 pt-4 border-t border-slate-700">
 
-        <div className="w-full flex flex-col sm:flex-row gap-4">
+        {/* --- ALTERAÇÃO AQUI: de "flex-col sm:flex-row" para "flex-row" --- */}
+        <div className="w-full flex flex-row gap-4">
           <div className="flex-1 min-w-0">
             <label htmlFor="dataInicio" className="block text-sm font-medium text-slate-400 mb-1">Data de Início:</label>
             <input type="date" id="dataInicio" value={dataInicio} onChange={(e) => setDataInicio(e.target.value)} className="p-2.5 bg-slate-700 border border-slate-600 rounded-md w-full focus:ring-2 focus:ring-purple-500 text-slate-200" style={{ colorScheme: 'dark' }} />
