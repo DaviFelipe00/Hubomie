@@ -3,7 +3,7 @@
 interface Lancamento {
   fornecedor: string;
   valor: number;
-  vencimento: string;
+  vencimento: string; // Este campo agora recebe a data de pagamento
 }
 
 interface TabelaProps {
@@ -20,7 +20,10 @@ export function TabelaLancamentos({ lancamentos }: TabelaProps) {
             <tr>
               {/* --- FONTES E PADDINGS AJUSTADOS --- */}
               <th className="py-3 px-2 sm:px-4 text-[11px] sm:text-xs uppercase tracking-wider font-bold text-slate-400">Fornecedor</th>
-              <th className="py-3 px-2 sm:px-4 text-[11px] sm:text-xs uppercase tracking-wider font-bold text-slate-400">Vencimento</th>
+              
+              {/* --- ALTERAÇÃO AQUI --- */}
+              <th className="py-3 px-2 sm:px-4 text-[11px] sm:text-xs uppercase tracking-wider font-bold text-slate-400">Data Pagamento</th>
+              
               <th className="py-3 px-2 sm:px-4 text-[11px] sm:text-xs uppercase tracking-wider font-bold text-slate-400 text-right">Valor</th>
             </tr>
           </thead>

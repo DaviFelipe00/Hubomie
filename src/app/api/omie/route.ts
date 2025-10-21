@@ -2,7 +2,8 @@
 
 import { NextResponse, type NextRequest } from 'next/server';
 import * as OmieService from '@/lib/omie.service';
-import { Cliente } from '@/lib/omie.service';
+// --- ALTERAÇÃO: Importar a nova interface ---
+import { Cliente, MovimentoFinanceiro } from '@/lib/omie.service';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,9 +40,11 @@ export async function GET(request: NextRequest) {
             ? fornecedoresQuery.split(',').map(Number)
             : IDS_FORNECEDORES_PADRAO;
 
-        const [todosOsClientes, todasAsContasDaAPI] = await Promise.all([
+        // --- ALTERAÇÃO: Chamar a nova função de serviço ---
+        const [todosOsClientes, todosOsMovimentosDaAPI] = await Promise.all([
             getClientesComCache(),
-            OmieService.buscarTodasContasAPagarDoPeriodo(dataDe, dataAte)
+            // Esta é a linha que muda:
+            OmieService.buscarMovimentosPagamentoDoPeriodo(dataDe, dataAte)
         ]);
         
         const parseDate = (dateStr: string): Date => {
@@ -49,34 +52,33 @@ export async function GET(request: NextRequest) {
             return new Date(year, month - 1, day);
         };
 
-        // --- FILTRO ADICIONAL PARA GARANTIR A DATA DE VENCIMENTO ---
-        const dataInicioFiltro = parseDate(dataDe);
-        const dataFimFiltro = parseDate(dataAte);
-
-        const contasNoPeriodoDeVencimento = todasAsContasDaAPI.filter(conta => {
-            if (!conta.data_vencimento) return false;
-            const dataVencimento = parseDate(conta.data_vencimento);
-            return dataVencimento >= dataInicioFiltro && dataVencimento <= dataFimFiltro;
-        });
-        // --- FIM DO FILTRO ADICIONAL ---
+        // --- REMOÇÃO: O filtro manual de DATA DE VENCIMENTO foi removido ---
+        // (O bloco 'constasNoPeriodoDeVencimento' foi removido daqui)
 
         const mapaDeNomes = new Map<number, string>();
         todosOsClientes.forEach(cliente => mapaDeNomes.set(cliente.codigo_cliente_omie, cliente.nome_fantasia));
         
         const idSet = new Set(idsParaFiltrar);
-        // Agora filtramos a lista que já foi verificada pela data de vencimento
-        const contasFiltradas = contasNoPeriodoDeVencimento.filter(conta => idSet.has(conta.codigo_cliente_fornecedor));
+
+        // --- ALTERAÇÃO: Filtrar a lista de movimentos ---
+        const movimentosFiltrados = todosOsMovimentosDaAPI.filter(mov => 
+            idSet.has(mov.codigo_cliente_fornecedor)
+        );
         
-        const valorTotal = contasFiltradas.reduce((acc, conta) => acc + conta.valor_documento, 0);
+        // --- ALTERAÇÃO: Usar o campo 'valor' (ou o nome correto da interface) ---
+        // (Assumindo que o campo de valor do movimento é 'valor')
+        const valorTotal = movimentosFiltrados.reduce((acc, mov) => acc + mov.valor, 0);
         
-        const lancamentosOrdenados = contasFiltradas.map(conta => ({
-            fornecedor: mapaDeNomes.get(conta.codigo_cliente_fornecedor) || "Desconhecido",
-            valor: conta.valor_documento,
-            vencimento: conta.data_vencimento,
+        // --- ALTERAÇÃO: Mapear os campos de movimento ---
+        // (Mapeia 'data_lancamento' para 'vencimento' para o frontend funcionar)
+        const lancamentosOrdenados = movimentosFiltrados.map(mov => ({
+            fornecedor: mapaDeNomes.get(mov.codigo_cliente_fornecedor) || "Desconhecido",
+            valor: mov.valor,
+            vencimento: mov.data_lancamento, // Mapeia a data de pagamento para o campo 'vencimento'
         })).sort((a, b) => parseDate(b.vencimento).getTime() - parseDate(a.vencimento).getTime());
 
         return NextResponse.json({
-            totalLancamentos: contasFiltradas.length,
+            totalLancamentos: movimentosFiltrados.length,
             valorTotal,
             lancamentos: lancamentosOrdenados,
         });
