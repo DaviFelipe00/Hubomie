@@ -33,26 +33,26 @@ interface OmieMovimentoRaw {
   detalhes?: {
     nCodCliente?: number;
     dDtPagamento?: string;
-    cGrupo?: string;
+    cGrupo?: string; // Campo usado para filtrar
   };
   resumo?: {
     nValPago?: number;
   };
 }
 
-// +++ DEFINIÇÃO DOS FORNECEDORES E VALOR FIXO DA RIT +++
 const ID_RIT = 4807594928;
 const VALOR_FIXO_RIT = 3030.40;
 const ID_BRFIBRA = 4807594778;
 const ID_WORLDNET = 5202017644;
+const ID_MUNDIVOX = 4807594893;
 
 // Lista dos IDs dos fornecedores que queremos incluir
-const IDS_FORNECEDORES_RELEVANTES = [ID_RIT, ID_BRFIBRA, ID_WORLDNET];
+const IDS_FORNECEDORES_RELEVANTES = [ID_RIT, ID_BRFIBRA, ID_WORLDNET, ID_MUNDIVOX];
 
 
 // --- FUNÇÃO DE LÓGICA DE BUSCA ---
 
-// Função genérica para chamar a API Omie (sem alterações)
+// Função genérica para chamar a API Omie (mantém logs de erro)
 async function consultarOmie(call: string, params: any, endpointUrl: string): Promise<any> {
     const fullUrl = `https://app.omie.com.br/api/v1${endpointUrl}`;
     const requestBody = { "call": call, "app_key": OMIE_APP_KEY, "app_secret": OMIE_APP_SECRET, "param": [params] };
@@ -64,46 +64,45 @@ async function consultarOmie(call: string, params: any, endpointUrl: string): Pr
         clearTimeout(timeoutId);
         const data = await response.json();
         if (!response.ok || data.faultstring) {
-            console.error(`Erro na API Omie (${call}): Status ${response.status}`, data.faultstring || 'Sem faultstring');
+            console.error(`Erro na API Omie (${call}): Status ${response.status}`, data.faultstring || 'Sem faultstring'); // Mantém log de erro
             throw new Error(data.faultstring || `Erro HTTP: ${response.status}`);
         }
         return data;
     } catch (error) {
         clearTimeout(timeoutId);
-        if (error instanceof Error && error.name === 'AbortError') { throw new Error('A requisição para a API Omie demorou muito (Timeout).'); }
-        console.error(`Falha ao consultar Omie (${call}): ${error instanceof Error ? error.message : String(error)}`);
+        if (error instanceof Error && error.name === 'AbortError') { throw new Error('A requisição para a API Omie demorou muito (Timeout).'); } // Mantém erro de timeout
+        console.error(`Falha ao consultar Omie (${call}): ${error instanceof Error ? error.message : String(error)}`); // Mantém log de erro genérico
         throw error;
     }
 }
 
-// Função buscarTodosOsClientes (sem alterações)
+// Função buscarTodosOsClientes (mantém logs de início/fim)
 export async function buscarTodosOsClientes(): Promise<Cliente[]> {
-    console.log("Service: Iniciando busca de todos os clientes...");
+    console.log("Service: Iniciando busca de todos os clientes..."); // Mantido
     const primeiraPagina = await consultarOmie("ListarClientes", { "pagina": 1, "registros_por_pagina": 500 }, "/geral/clientes/");
     if (!primeiraPagina || !primeiraPagina.clientes_cadastro) return [];
     let todosOsClientes = primeiraPagina.clientes_cadastro;
     const totalDePaginas = primeiraPagina.total_de_paginas;
     if (totalDePaginas > 1) {
         for (let i = 2; i <= totalDePaginas; i++) {
-            const paginaResult = await consultarOmie("ListarClientes", { "pagina": i, "registros_por_pagina": 500 }, "/geral/clientes/");
-            if (paginaResult && paginaResult.clientes_cadastro) { todosOsClientes = todosOsClientes.concat(paginaResult.clientes_cadastro); }
+            try { // Adicionado try/catch para paginação
+                const paginaResult = await consultarOmie("ListarClientes", { "pagina": i, "registros_por_pagina": 500 }, "/geral/clientes/");
+                if (paginaResult && paginaResult.clientes_cadastro) { todosOsClientes = todosOsClientes.concat(paginaResult.clientes_cadastro); }
+            } catch(error) {
+                 console.error(`Erro ao buscar página ${i} de clientes:`, error);
+            }
         }
     }
-    console.log(`Service: ${todosOsClientes.length} clientes/fornecedores carregados.`);
+    console.log(`Service: ${todosOsClientes.length} clientes/fornecedores carregados.`); // Mantido
     return todosOsClientes;
 }
 
 
-// +++ FUNÇÃO FINAL ATUALIZADA com filtro MISTO +++
+// +++ FUNÇÃO FINAL LIMPA +++
 export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte: string): Promise<MovimentoFinanceiro[]> {
-    console.log(`Service: Iniciando busca de PAGAMENTOS (RIT valor fixo, outros qualquer valor) de ${dataDe} a ${dataAte}...`); // Log atualizado
+    console.log(`Service: Iniciando busca de PAGAMENTOS (RIT valor fixo, outros qualquer valor) de ${dataDe} a ${dataAte}...`); // Mantido
 
-    const params = {
-        "nPagina": 1,
-        "nRegPorPagina": 500,
-        "dDtPagtoDe": dataDe,
-        "dDtPagtoAte": dataAte
-    };
+    const params = { "nPagina": 1, "nRegPorPagina": 500, "dDtPagtoDe": dataDe, "dDtPagtoAte": dataAte };
     const call = "ListarMovimentos";
     const endpointUrl = "/financas/mf/";
 
@@ -111,12 +110,12 @@ export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte
     try {
         primeiraPagina = await consultarOmie(call, params, endpointUrl);
     } catch (error) {
-        console.error("Erro ao buscar a primeira página de movimentos:", error);
+        // Log de erro já está em consultarOmie
         return [];
     }
 
     if (!primeiraPagina || !Array.isArray(primeiraPagina.movimentos)) {
-        console.warn(`Service: A API Omie (${call}) não retornou a lista 'movimentos'.`);
+        console.warn(`Service: A API Omie (${call}) não retornou a lista 'movimentos'.`); // Mantém aviso importante
         return [];
     }
 
@@ -134,67 +133,51 @@ export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte
                 if (paginaResult && Array.isArray(paginaResult.movimentos)) {
                     todosOsMovimentos = todosOsMovimentos.concat(paginaResult.movimentos);
                 } else {
+                     // Mantém aviso se uma página falhar
                     console.warn(`Página ${i} não retornou a lista 'movimentos'.`);
                 }
             } catch (error) {
-                console.error(`Erro ao buscar página ${i} de movimentos:`, error);
+                // Log de erro já está em consultarOmie
+                // Apenas loga qual página falhou
+                console.error(`Erro ao buscar página ${i} de movimentos.`);
             }
         }
     }
 
-    console.log(`Service: Busca de movimentos finalizada. Total de ${todosOsMovimentos.length} movimentos brutos carregados.`);
+    // console.log(`Service: Busca de movimentos finalizada. Total de ${todosOsMovimentos.length} movimentos brutos carregados.`); // Log removido (opcional)
 
-    // --- Mapeamento e Filtro Final MISTO ---
+    // --- Mapeamento e Filtro Final (sem logs internos) ---
     const movimentosMapeados = todosOsMovimentos
-        // 1. Filtra apenas CONTA_A_PAGAR
         .filter((mov: OmieMovimentoRaw) => mov.detalhes?.cGrupo === 'CONTA_A_PAGAR')
-
-        // 2. Filtra pelos fornecedores E aplica a regra de valor específica para RIT
         .filter((mov: OmieMovimentoRaw) => {
             const codCliente = mov.detalhes?.nCodCliente;
             const valorPago = mov.resumo?.nValPago;
 
-            // Verifica se é um dos fornecedores relevantes
             if (codCliente === undefined || !IDS_FORNECEDORES_RELEVANTES.includes(codCliente)) {
-                return false; // Não é um dos 3 fornecedores
+                return false;
             }
-
-            // Se for RIT, aplica o filtro de valor exato
             if (codCliente === ID_RIT) {
                 if (valorPago === undefined || Math.abs(valorPago - VALOR_FIXO_RIT) > 0.01) {
-                    // console.log(`Filtrando RIT: Valor ${valorPago} != ${VALOR_FIXO_RIT}`); // Log opcional
-                    return false; // Valor da RIT não bate
+                    return false;
                 }
-            }
-            // Se for BRFIBRA ou WORLDNET (ou qualquer outro na lista IDS_FORNECEDORES_RELEVANTES que não seja RIT),
-            // não aplicamos filtro de valor, apenas verificamos se o valor existe.
-            else {
+            } else {
                 if (valorPago === undefined) {
-                    return false; // Precisa ter algum valor pago registrado
+                    return false;
                 }
             }
-
-            return true; // Passou nos filtros
+            return true;
         })
-        // 3. Mapeia para o formato esperado pelo frontend
         .map((mov: OmieMovimentoRaw) => {
             const codFornecedor = mov.detalhes!.nCodCliente;
             const valorMov = mov.resumo!.nValPago;
             const dataMov = mov.detalhes!.dDtPagamento;
-
-            // Validação (pouco provável de falhar após os filtros)
             if (codFornecedor == null || valorMov == null || dataMov == null) { return null; }
-
-            return {
-                codigo_cliente_fornecedor: codFornecedor,
-                valor: valorMov,
-                data_lancamento: dataMov
-            } as MovimentoFinanceiro;
+            return { codigo_cliente_fornecedor: codFornecedor, valor: valorMov, data_lancamento: dataMov } as MovimentoFinanceiro;
         })
-        // 4. Remove quaisquer itens nulos
         .filter((mov): mov is MovimentoFinanceiro => mov !== null);
 
-    console.log(`Service: Mapeamento finalizado. ${movimentosMapeados.length} PAGAMENTOS RELEVANTES (RIT valor fixo, outros qualquer valor) encontrados.`); // Log atualizado
+    // Log final mantido
+    console.log(`Service: Mapeamento finalizado. ${movimentosMapeados.length} PAGAMENTOS RELEVANTES encontrados.`);
 
     return movimentosMapeados;
 }
