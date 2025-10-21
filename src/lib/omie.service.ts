@@ -40,16 +40,14 @@ interface OmieMovimentoRaw {
   };
 }
 
-// +++ DEFINIÇÃO DOS VALORES EXATOS DOS CONTRATOS +++
-// Mapeia o ID do fornecedor (nCodCliente) para o valor exato esperado do contrato
-const VALORES_CONTRATOS_FIXOS: { [key: number]: number } = {
-  4807594928: 3030.40, // RIT SOLUCOES
-  4807594778: 1350.00, // BRFIBRA (Valor atualizado)
-  5202017644: 1021.65  // WORLDNET
-};
-// Lista apenas dos IDs dos fornecedores de contrato fixo
-const IDS_FORNECEDORES_CONTRATO = Object.keys(VALORES_CONTRATOS_FIXOS).map(Number);
-// (Removemos VALORES_ALTERNATIVOS pois agora há apenas um valor por fornecedor)
+// +++ DEFINIÇÃO DOS FORNECEDORES E VALOR FIXO DA RIT +++
+const ID_RIT = 4807594928;
+const VALOR_FIXO_RIT = 3030.40;
+const ID_BRFIBRA = 4807594778;
+const ID_WORLDNET = 5202017644;
+
+// Lista dos IDs dos fornecedores que queremos incluir
+const IDS_FORNECEDORES_RELEVANTES = [ID_RIT, ID_BRFIBRA, ID_WORLDNET];
 
 
 // --- FUNÇÃO DE LÓGICA DE BUSCA ---
@@ -96,9 +94,9 @@ export async function buscarTodosOsClientes(): Promise<Cliente[]> {
 }
 
 
-// +++ FUNÇÃO FINAL ATUALIZADA com filtro de valor EXATO (BRFIBRA = 1350) +++
+// +++ FUNÇÃO FINAL ATUALIZADA com filtro MISTO +++
 export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte: string): Promise<MovimentoFinanceiro[]> {
-    console.log(`Service: Iniciando busca de PAGAMENTOS DE CONTRATOS FIXOS (valores exatos) de ${dataDe} a ${dataAte}...`); // Log atualizado
+    console.log(`Service: Iniciando busca de PAGAMENTOS (RIT valor fixo, outros qualquer valor) de ${dataDe} a ${dataAte}...`); // Log atualizado
 
     const params = {
         "nPagina": 1,
@@ -146,31 +144,34 @@ export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte
 
     console.log(`Service: Busca de movimentos finalizada. Total de ${todosOsMovimentos.length} movimentos brutos carregados.`);
 
-    // --- Mapeamento e Filtro Final para VALORES EXATOS ESPECÍFICOS ---
+    // --- Mapeamento e Filtro Final MISTO ---
     const movimentosMapeados = todosOsMovimentos
         // 1. Filtra apenas CONTA_A_PAGAR
         .filter((mov: OmieMovimentoRaw) => mov.detalhes?.cGrupo === 'CONTA_A_PAGAR')
 
-        // 2. Filtra pelos fornecedores de contrato E pelo VALOR EXATO definido
+        // 2. Filtra pelos fornecedores E aplica a regra de valor específica para RIT
         .filter((mov: OmieMovimentoRaw) => {
             const codCliente = mov.detalhes?.nCodCliente;
             const valorPago = mov.resumo?.nValPago;
 
-            // Verifica se é um dos fornecedores de contrato
-            if (codCliente === undefined || !IDS_FORNECEDORES_CONTRATO.includes(codCliente)) {
-                return false; // Não é um fornecedor de contrato
+            // Verifica se é um dos fornecedores relevantes
+            if (codCliente === undefined || !IDS_FORNECEDORES_RELEVANTES.includes(codCliente)) {
+                return false; // Não é um dos 3 fornecedores
             }
 
-            // Verifica se o valor pago bate EXATAMENTE com o valor definido (com tolerância)
-            if (valorPago === undefined) return false;
-
-            const valorEsperado = VALORES_CONTRATOS_FIXOS[codCliente]; // Pega o valor definido para este fornecedor
-
-            // Compara com tolerância de 1 centavo
-            if (Math.abs(valorPago - valorEsperado) > 0.01) {
-                // Log opcional para ver o que foi filtrado
-                // console.log(`Filtrando valor exato: Fornecedor ${codCliente}, Valor Pago: ${valorPago}, Esperado: ${valorEsperado}`);
-                return false; // Valor não bate com o esperado
+            // Se for RIT, aplica o filtro de valor exato
+            if (codCliente === ID_RIT) {
+                if (valorPago === undefined || Math.abs(valorPago - VALOR_FIXO_RIT) > 0.01) {
+                    // console.log(`Filtrando RIT: Valor ${valorPago} != ${VALOR_FIXO_RIT}`); // Log opcional
+                    return false; // Valor da RIT não bate
+                }
+            }
+            // Se for BRFIBRA ou WORLDNET (ou qualquer outro na lista IDS_FORNECEDORES_RELEVANTES que não seja RIT),
+            // não aplicamos filtro de valor, apenas verificamos se o valor existe.
+            else {
+                if (valorPago === undefined) {
+                    return false; // Precisa ter algum valor pago registrado
+                }
             }
 
             return true; // Passou nos filtros
@@ -181,6 +182,7 @@ export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte
             const valorMov = mov.resumo!.nValPago;
             const dataMov = mov.detalhes!.dDtPagamento;
 
+            // Validação (pouco provável de falhar após os filtros)
             if (codFornecedor == null || valorMov == null || dataMov == null) { return null; }
 
             return {
@@ -192,7 +194,7 @@ export async function buscarMovimentosPagamentoDoPeriodo(dataDe: string, dataAte
         // 4. Remove quaisquer itens nulos
         .filter((mov): mov is MovimentoFinanceiro => mov !== null);
 
-    console.log(`Service: Mapeamento finalizado. ${movimentosMapeados.length} PAGAMENTOS COM VALORES EXATOS encontrados.`); // Log atualizado
+    console.log(`Service: Mapeamento finalizado. ${movimentosMapeados.length} PAGAMENTOS RELEVANTES (RIT valor fixo, outros qualquer valor) encontrados.`); // Log atualizado
 
     return movimentosMapeados;
 }
