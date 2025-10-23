@@ -1,5 +1,3 @@
-// src/app/dashboard/page.tsx
-
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
@@ -9,7 +7,6 @@ import { FiltrosDashboard } from "@/components/dashboard/FiltrosDashboard";
 import { CardsResumo } from "@/components/dashboard/CardsResumo";
 import { TabelaLancamentos } from "@/components/dashboard/TabelaLancamentos";
 import { ResumoPorFornecedor } from "@/components/dashboard/ResumoPorFornecedor";
-import { useAuth } from "@/hooks/useAuth"; // ADICIONADO: Importa o hook de autenticação
 
 // --- Tipagens ---
 const toInputDate = (date: Date): string => date.toISOString().split('T')[0];
@@ -40,40 +37,20 @@ export default function DashboardPage() {
   const [listaFornecedores, setListaFornecedores] = useState<Fornecedor[]>([]);
   const [fornecedoresSelecionados, setFornecedoresSelecionados] = useState<number[]>([]);
 
-  // --- INÍCIO DA LÓGICA DE AUTENTICAÇÃO E PROTEÇÃO ---
-  const { requireAuth, isReady, isAuthenticated, logout } = useAuth(); // HOOK DE AUTENTICAÇÃO
-
+  // Busca a lista de fornecedores (sem alterações)
   useEffect(() => {
-    // 1. CHAMA O REQUIREAUTH PARA REDIRECIONAR SE NÃO ESTIVER AUTENTICADO
-    requireAuth();
-    // 2. BUSCA FORNECEDORES APENAS SE ESTIVER AUTENTICADO
-    if (isAuthenticated) {
-        const fetchFornecedores = async () => {
-          try {
-            const response = await fetch('/api/fornecedores');
-            if (!response.ok) throw new Error('Falha ao buscar fornecedores.');
-            const data = await response.json();
-            setListaFornecedores(data);
-          } catch (err) {
-            console.error("Erro ao buscar fornecedores:", err);
-          }
-        };
-        fetchFornecedores();
-    }
-  }, [isAuthenticated, requireAuth]); // Depende de isAuthenticated e requireAuth
-
-
-  // 3. RENDERIZA TELA DE CARREGAMENTO/PROTEÇÃO
-  if (!isReady || !isAuthenticated) {
-    return (
-        <main className="flex flex-col items-center justify-center min-h-screen bg-slate-900">
-            <div className="loader ease-linear rounded-full border-4 border-t-4 border-slate-700 h-12 w-12 mb-4 animate-spin border-t-purple-500"></div>
-            <p className="text-xl text-slate-400">Verificando acesso...</p>
-        </main>
-    );
-  }
-  // --- FIM DA LÓGICA DE AUTENTICAÇÃO E PROTEÇÃO ---
-
+    const fetchFornecedores = async () => {
+      try {
+        const response = await fetch('/api/fornecedores');
+        if (!response.ok) throw new Error('Falha ao buscar fornecedores.');
+        const data = await response.json();
+        setListaFornecedores(data);
+      } catch (err) {
+        console.error("Erro ao buscar fornecedores:", err);
+      }
+    };
+    fetchFornecedores();
+  }, []);
 
   // Função para buscar dados da API /api/omie
   const fetchData = async (inicio: string, fim: string, fornecedoresIds: number[]) => {
@@ -119,7 +96,7 @@ export default function DashboardPage() {
     }
   };
 
-  // Lógica dos presets
+  // Lógica dos presets (sem alterações)
   const handlePresetClick = (periodo: Periodo) => {
     const hoje = new Date();
     let inicio = new Date(), fim = hoje;
@@ -138,21 +115,19 @@ export default function DashboardPage() {
     fetchData(inicioStr, fimStr, fornecedoresSelecionados);
   };
 
-  // Efeito inicial para carregar 'este-mes' (Ajustado para depender de isAuthenticated)
+  // Efeito inicial para carregar 'este-mes' (sem alterações)
   useEffect(() => {
-    if (isAuthenticated) {
-        handlePresetClick('este-mes');
-    }
+    handlePresetClick('este-mes');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]); 
+  }, []); // Dependência vazia para rodar só na montagem
 
-  // Lógica do botão filtrar
+  // Lógica do botão filtrar (sem alterações)
   const handleFiltrarClick = () => {
     setActivePreset(null); // Limpa o preset ativo ao usar datas manuais
     fetchData(dataInicio, dataFim, fornecedoresSelecionados);
   };
 
-  // Cálculo dos gastos por fornecedor
+  // Cálculo dos gastos por fornecedor (adicionado log)
   const gastosPorFornecedor = useMemo(() => {
     // Verifica se 'dados' e 'dados.lancamentos' existem e se 'lancamentos' é um array
     if (!dados || !Array.isArray(dados.lancamentos)) {
@@ -175,17 +150,17 @@ export default function DashboardPage() {
                            .sort((a, b) => b.valor - a.valor);
     console.log("Resultado gastosPorFornecedor:", resultado);
     return resultado;
-  }, [dados]); 
+  }, [dados]); // Depende apenas de 'dados'
 
-  // Preparação dos dados para o gráfico
+  // Preparação dos dados para o gráfico (adicionado log)
   const dadosParaGrafico = useMemo(() => {
       const labels = gastosPorFornecedor.map(item => item.nome);
       const valores = gastosPorFornecedor.map(item => item.valor);
       console.log("Preparando dadosParaGrafico:", { labels, valores });
       return { labels, valores };
-  }, [gastosPorFornecedor]); 
+  }, [gastosPorFornecedor]); // Depende do resultado do useMemo anterior
 
-  // Renderização de Loading para busca de dados
+  // Renderização do Loading inicial
   if (isLoading && !dados && !error) {
     return (
       <main className="flex flex-col items-center justify-center min-h-screen bg-slate-900">
@@ -196,29 +171,20 @@ export default function DashboardPage() {
   }
 
   // Renderização de Erro
-  if (error && !isLoading) { 
+  if (error && !isLoading) { // Mostra erro apenas se não estiver carregando
     return (
       <main className="p-4 sm:p-8 bg-slate-900 min-h-screen font-sans text-slate-300">
-         <header className="mb-8 flex justify-between items-center"> 
-            <div>
-                <h1 className="text-3xl sm:text-4xl font-bold text-white">Gestão de Contratos</h1>
-                <p className="text-slate-400 mt-1">Análise de despesas com fornecedores de internet.</p>
-            </div>
-            {/* BOTÃO SAIR */}
-            <button 
-                onClick={logout} 
-                className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors text-sm"
-            >
-                Sair
-            </button>
+         <header className="mb-8">
+            <h1 className="text-3xl sm:text-4xl font-bold text-white">Gestão de Contratos</h1>
+            <p className="text-slate-400 mt-1">Análise de despesas com fornecedores de internet.</p>
          </header>
-         <FiltrosDashboard 
+         <FiltrosDashboard /* Passa as props mesmo com erro para permitir nova busca */
             dataInicio={dataInicio} setDataInicio={(v) => { setDataInicio(v); setActivePreset(null); }}
             dataFim={dataFim} setDataFim={(v) => { setDataFim(v); setActivePreset(null); }}
             activePreset={activePreset}
             handlePresetClick={handlePresetClick}
             handleFiltrarClick={handleFiltrarClick}
-            isLoading={isLoading} 
+            isLoading={isLoading} // Pode ainda estar carregando se o erro foi nos fornecedores
             fornecedores={listaFornecedores}
             fornecedoresSelecionados={fornecedoresSelecionados}
             setFornecedoresSelecionados={setFornecedoresSelecionados}
@@ -228,7 +194,7 @@ export default function DashboardPage() {
             <h3 className="text-xl font-semibold text-white">Ocorreu um Erro</h3>
             <p className="text-slate-400 mt-2 max-w-md">{error}</p>
              <button
-               onClick={() => fetchData(dataInicio, dataFim, fornecedoresSelecionados)} 
+               onClick={() => fetchData(dataInicio, dataFim, fornecedoresSelecionados)} // Botão para tentar novamente
                className="mt-4 bg-purple-600 text-white font-bold py-2 px-4 rounded hover:bg-purple-700 transition-colors"
              >
                Tentar Novamente
@@ -241,18 +207,9 @@ export default function DashboardPage() {
   // Renderização Principal
   return (
     <main className="p-4 sm:p-8 bg-slate-900 min-h-screen font-sans text-slate-300">
-      {/* HEADER ATUALIZADO COM BOTÃO SAIR */}
-      <header className="mb-8 flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl sm:text-4xl font-bold text-white">Gestão de Contratos</h1>
-          <p className="text-slate-400 mt-1">Análise de despesas com fornecedores de internet.</p>
-        </div>
-        <button 
-            onClick={logout} 
-            className="bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700 transition-colors text-sm"
-        >
-            Sair
-        </button>
+      <header className="mb-8">
+        <h1 className="text-3xl sm:text-4xl font-bold text-white">Gestão de Contratos</h1>
+        <p className="text-slate-400 mt-1">Análise de despesas com fornecedores de internet.</p>
       </header>
 
       <FiltrosDashboard
